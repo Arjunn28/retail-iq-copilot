@@ -15,6 +15,14 @@ conn = mysql.connector.connect(
 cursor = conn.cursor()
 
 df = pd.read_csv("data/superstore.csv")
+
+
+df['Order Date'] = pd.to_datetime(df['Order Date'], format='%m/%d/%Y')
+df['Ship Date'] = pd.to_datetime(df['Ship Date'], format='%m/%d/%Y')
+
+df['Order Date'] = df['Order Date'].dt.strftime('%Y-%m-%d')
+df['Ship Date'] = df['Ship Date'].dt.strftime('%Y-%m-%d')
+
 print(df.columns)
 
 # customers
