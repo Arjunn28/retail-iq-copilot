@@ -6,10 +6,26 @@ from openai import OpenAI
 import re
 import requests
 
+from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI()
 load_dotenv()
-# client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+app = FastAPI()
+
+# CORS settings
+origins = [
+    "http://localhost:5173",  # your frontend dev server
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 conn = mysql.connector.connect(
     host="localhost",
