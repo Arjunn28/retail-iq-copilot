@@ -91,58 +91,24 @@ Question: {question}
 
     return clean_sql.strip()
 
-def generate_summary(question, data, name_alias, metric, top_value, second_value, difference):
-    if not data:
-        return "No data available"
-
+def generate_summary(question, name_alias, metric, top_name, second_name, top_value, second_value, difference):
+    
     try:
-        # -------------------------
-        # Extract keys dynamically
-        # -------------------------
-        name_key = list(data[0].keys())[0]
-        value_key = list(data[0].keys())[1]
-
-        label = "category" if name_alias == "category" else "product"
-
-        top_name = data[0][name_key]
-        top_value = round(data[0][value_key], 2)
-
-        second_name = None
-        second_value = None
-        ratio = None
-
-        if len(data) > 1:
-            second_name = data[1][name_key]
-            second_value = round(data[1][value_key], 2)
-
-            if second_value != 0:
-                ratio = round(top_value / second_value, 2)
-
-        # -------------------------
-        # prompt
-        # -------------------------
         prompt = f"""
-You are a sharp business analyst.
+        You are a business analyst.
 
-Return ONLY a valid JSON. No explanation.
-
-Format:
-{{
-  "insight": "string"
-}}
+        Return ONLY valid JSON:
+        {{
+        "insight": "string"
+        }}
 
 Rules:
 - One sentence only
-- Start with top {name_alias} name
-- Mention top value
-- Compare with second {name_alias}
-- Mention absolute difference
-- No percentages, no ratios
-- No markdown, no extra text
-
-Top {name_alias}: {clean_data[0]["name"]} with {top_value}
-Second {name_alias}: {clean_data[1]["name"]} with {second_value}
-Difference: {difference}
+- Start with {top_name}
+- Mention ${top_value}
+- Compare with {second_name}
+- Mention difference ${difference}
+- No percentages, no ratios, no extra text
 
 Question: {question}
 """
@@ -165,26 +131,13 @@ Question: {question}
 
         try:
             parsed = json.loads(raw_output)
-            summary = parsed.get("insight", "")
+            return parsed.get("insight", "")
         except:
-            summary = ""
-
-        return summary
+            return ""
 
     except Exception as e:
         print("Ollama error:", e)
-
-        # -------------------------
-        # Fallback (rule-based)
-        # -------------------------
-        if len(data) > 1 and second_value:
-            return (
-                f"{top_name} leads with {top_value} in {metric}, "
-                f"generating {round(top_value/second_value, 2)}x more than the next {label}."
-            )
-
-        return f"{top_name} is the top {label} with {top_value} in {metric}."
-
+        return ""
 
 @app.get("/ask")
 def ask(question: str):
@@ -193,36 +146,29 @@ def ask(question: str):
     cursor = conn.cursor()
 
     # -------------------------
-    # 1. Extract LIMIT
+    # Detect intent
+    # -------------------------
+    is_growth_query = any(word in question for word in ["grow", "growth", "grew", "increase"])
+    is_decline_query = any(word in question for word in ["decline", "drop", "decrease", "fell"])
+
+    # -------------------------
+    # Extract LIMIT
     # -------------------------
     match = re.search(r'\d+', question)
     limit = int(match.group()) if match else 5
 
     # -------------------------
-    # 2. Detect TOP / BOTTOM
-    # -------------------------
-    if re.search(r"(top|best|highest)", question):
-        order = "DESC"
-    elif re.search(r"(bottom|worst|lowest)", question):
-        order = "ASC"
-    else:
-        order = "DESC"
-
-    # -------------------------
-    # 3. Detect METRIC (safe)
+    # Detect metric
     # -------------------------
     if re.search(r"(profit|margin)", question):
         metric = "profit"
         alias = "total_profit"
-    elif re.search(r"(sales|revenue)", question):
-        metric = "sales"
-        alias = "total_sales"
     else:
         metric = "sales"
         alias = "total_sales"
 
     # -------------------------
-    # 4. Detect REGION
+    # Detect region & year
     # -------------------------
     region_match = re.search(r"(west|east|central|south)", question)
     region_filter = region_match.group().capitalize() if region_match else None
@@ -230,92 +176,91 @@ def ask(question: str):
     year_match = re.search(r'(20\d{2})', question)
     year_filter = year_match.group(1) if year_match else None
 
-    where_clause = ""
-
-    if region_filter and year_filter:
-        where_clause = f"WHERE o.region = '{region_filter}' AND YEAR(o.order_date) = {year_filter}"
-    elif region_filter:
-        where_clause = f"WHERE o.region = '{region_filter}'"
-    elif year_filter:
-        where_clause = f"WHERE YEAR(o.order_date) = {year_filter}"
-
-    # Detect category vs product level
+    # -------------------------
+    # Detect grouping
+    # -------------------------
     if re.search(r"(category|categories)", question):
         group_field = "p.category"
         name_alias = "category"
     else:
         group_field = "p.product_name"
         name_alias = "product_name"
-        
-    # -------------------------
-    # 5. Build SQL (rule-based)
-    # -------------------------
+
     sql_query = None
 
-    try:
-        # -------------------------
-        # Base FROM + JOIN
-        # -------------------------
+    # -------------------------
+    # 1. Growth Query
+    # -------------------------
+    if (is_growth_query or is_decline_query) and year_filter:
+        year = int(year_filter)
+        prev_year = year - 1
+
+        order_clause = "ASC" if is_decline_query else "DESC"
+
+        sql_query = f"""
+        SELECT 
+            curr.category as category,
+            (curr.total_sales - prev.total_sales) as growth
+        FROM
+            (
+                SELECT p.category, SUM(s.sales) AS total_sales
+                FROM sales s
+                JOIN products p ON s.product_id = p.product_id
+                JOIN orders o ON s.order_id = o.order_id
+                WHERE YEAR(o.order_date) = {year}
+                GROUP BY p.category
+            ) curr
+        JOIN
+            (
+                SELECT p.category, SUM(s.sales) AS total_sales
+                FROM sales s
+                JOIN products p ON s.product_id = p.product_id
+                JOIN orders o ON s.order_id = o.order_id
+                WHERE YEAR(o.order_date) = {prev_year}
+                GROUP BY p.category
+            ) prev
+        ON curr.category = prev.category
+        ORDER BY growth {order_clause}
+        LIMIT {limit}
+        """
+
+        metric = "growth"
+        name_alias = "category"
+
+    # -------------------------
+    # 2. Normal Query
+    # -------------------------
+    else:
         joins = """
         FROM sales s
         JOIN products p ON s.product_id = p.product_id
         """
-
         where_conditions = []
-
-        # -------------------------
-        # Region filter
-        # -------------------------
         if region_filter:
             joins += "\nJOIN orders o ON s.order_id = o.order_id"
             where_conditions.append(f"o.region = '{region_filter}'")
-
-        # -------------------------
-        # Year filter
-        # -------------------------
+        
         if year_filter:
             if "JOIN orders o" not in joins:
                 joins += "\nJOIN orders o ON s.order_id = o.order_id"
             where_conditions.append(f"YEAR(o.order_date) = {year_filter}")
 
-        # -------------------------
-        # WHERE clause
-        # -------------------------
         where_clause = ""
         if where_conditions:
             where_clause = "WHERE " + " AND ".join(where_conditions)
 
-        # -------------------------
-        # FINAL SQL
-        # -------------------------
         sql_query = f"""
         SELECT {group_field} as {name_alias}, SUM(s.{metric}) as {alias}
         {joins}
         {where_clause}
         GROUP BY {group_field}
-        ORDER BY {alias} {order}
+        ORDER BY {alias} DESC
         LIMIT {limit}
         """
 
-    except Exception as e:
-        print("SQL build error:", e)
-        sql_query = None
-    
-
     # -------------------------
-# 6. Fallback to Ollama
-# -------------------------
-    if not sql_query:
-        try:
-            sql_query = generate_sql_with_ollama(question)
-        except Exception as e:
-            return {
-                "error": "LLM failed to generate query",
-                "details": str(e)
-            }
+    # Execute Query
     # -------------------------
-# 7. Execute query
-# -------------------------
     try:
         cursor.execute(sql_query)
         results = cursor.fetchall()
@@ -330,21 +275,104 @@ def ask(question: str):
             }
             for row in formatted_data
         ]
-        
+
+        # -------------------------
+        # Metrics
+        # -------------------------
+        top_name = clean_data[0]["name"] if len(clean_data) > 0 else None
+        second_name = clean_data[1]["name"] if len(clean_data) > 1 else None
+
         top_value = clean_data[0]["value"] if len(clean_data) > 0 else 0
         second_value = clean_data[1]["value"] if len(clean_data) > 1 else 0
-        difference = round(top_value - second_value, 2)
 
-        summary = generate_summary(question, formatted_data, name_alias, metric, top_value=top_value, second_value=second_value, difference=difference)
+        difference = round(abs(top_value - second_value), 2)
 
-        if not summary or "x more" in summary.lower() or "ratio" in summary.lower():
+        # -------------------------
+        # LLM Summary
+        # -------------------------
+        summary = generate_summary(
+            question,
+            name_alias,
+            metric,
+            top_name,
+            second_name,
+            top_value,
+            second_value,
+            difference
+        )
+
+        if (
+            not summary
+            or any(word in summary.lower() for word in [
+                "outperformed", "surpasses", "decrease", "decline", "increased"
+            ])
+        ):
+            summary = None
+
+        # # -------------------------
+        # # Fallback Summary
+        # # -------------------------
+        # if not summary or summary.strip() == "":
+        #     if len(clean_data) >= 2:
+        #         if metric == "growth":
+        #             if is_decline_query:
+        #                 if top_value < 0:
+        #                     summary = (
+        #                         f"{top_name} shows the biggest decline of ${abs(top_value):,.0f}, "
+        #                         f"worse than {second_name} by ${abs(difference):,.0f}."
+        #                     )
+        #                 else:
+        #                     summary = (
+        #                         f"{top_name} shows the lowest growth of ${top_value:,.0f}, "
+        #                         f"trailing {second_name} by ${abs(difference):,.0f}."
+        #                     )
+        #             else:
+        #                 summary = (
+        #                     f"{top_name} shows the highest growth of ${top_value:,.0f}, "
+        #                     f"ahead of {second_name} by ${difference:,.0f}."
+        #                 )
+        #         else:
+        #             summary = "No data available"
+
+        # return {
+        #     "insight": summary,
+        #     "data": clean_data
+        # }
+    
+
+        # -------------------------
+        # Fallback Summary (FINAL)
+        # -------------------------
+        if not summary or "leads with" not in summary.lower():
             if len(clean_data) >= 2:
-                summary = (
-                    f"{clean_data[0]['name']} leads with ${top_value:,.0f} in {metric}, "
-                    f"outperforming {clean_data[1]['name']} by ${difference:,.0f}."
-                )
+                if metric == "growth":
+                    if is_decline_query:
+                        if top_value < 0:
+                            summary = (
+                                f"{top_name} shows the biggest decline of ${abs(top_value):,.0f}, "
+                                f"worse than {second_name} by ${abs(difference):,.0f}."
+                            )
+                        else:
+                            summary = (
+                                f"{top_name} shows the lowest growth of ${top_value:,.0f}, "
+                                f"trailing {second_name} by ${abs(difference):,.0f}."
+                            )
+
+                    else:
+                        summary = (
+                            f"{top_name} shows the highest growth of ${top_value:,.0f}, "
+                            f"ahead of {second_name} by ${difference:,.0f}."
+                        )
+
+                else:
+                    summary = (
+                        f"{top_name} leads with ${top_value:,.0f} in {metric}, "
+                        f"outperforming {second_name} by ${difference:,.0f}."
+                    )
+
             elif len(clean_data) == 1:
-                summary = f"{clean_data[0]['name']} leads with ${top_value:,.0f} in {metric}."
+                summary = f"{top_name} leads with ${top_value:,.0f} in {metric}."
+
             else:
                 summary = "No data available"
 
@@ -355,9 +383,9 @@ def ask(question: str):
 
     except Exception as e:
         return {
-        "error": "Query execution failed",
-        "details": str(e),
-        "query": sql_query
+            "error": "Query execution failed",
+            "details": str(e),
+            "query": sql_query
         }
 
     finally:
