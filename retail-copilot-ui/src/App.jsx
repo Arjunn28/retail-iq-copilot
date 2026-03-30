@@ -63,7 +63,7 @@ function App() {
               {response.data.map((item, idx) => (
                 <tr key={idx}>
                   <td className="border border-gray-300 p-1">{item.name}</td>
-                  <td className="border border-gray-300 p-1">{item.value}</td>
+                  <td className="border border-gray-300 p-1">{item.display_value}</td>
                 </tr>
               ))}
             </tbody>

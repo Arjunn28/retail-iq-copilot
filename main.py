@@ -14,6 +14,14 @@ load_dotenv()
 
 app = FastAPI()
 
+def format_currency(value):
+    if value is None:
+        return "$0"
+    if abs(value) < 100:
+        return f"${value:,.2f}"
+    else:
+        return f"${value:,.0f}"
+
 # CORS settings
 origins = [
     "http://localhost:5173",  # your frontend dev server
@@ -174,6 +182,16 @@ def ask(question: str):
     limit = int(match.group()) if match else 5
 
     # -------------------------
+    # Detect TOP / BOTTOM
+    # -------------------------
+    if re.search(r"(top|best|highest)", question):
+        order = "DESC"
+    elif re.search(r"(bottom|worst|lowest)", question):
+        order = "ASC"
+    else:
+        order = "DESC"
+
+    # -------------------------
     # Detect metric
     # -------------------------
     if re.search(r"(profit|margin)", question):
@@ -205,7 +223,7 @@ def ask(question: str):
     sql_query = None
 
     # -------------------------
-    # 1. Growth Query
+    # Growth / Decline Query
     # -------------------------
     if (is_growth_query or is_decline_query) and year_filter:
         year = int(year_filter)
@@ -244,7 +262,7 @@ def ask(question: str):
         name_alias = "category"
 
     # -------------------------
-    # 2. Normal Query
+    # Normal Query
     # -------------------------
     else:
         joins = """
@@ -252,10 +270,11 @@ def ask(question: str):
         JOIN products p ON s.product_id = p.product_id
         """
         where_conditions = []
+
         if region_filter:
             joins += "\nJOIN orders o ON s.order_id = o.order_id"
             where_conditions.append(f"o.region = '{region_filter}'")
-        
+
         if year_filter:
             if "JOIN orders o" not in joins:
                 joins += "\nJOIN orders o ON s.order_id = o.order_id"
@@ -270,7 +289,7 @@ def ask(question: str):
         {joins}
         {where_clause}
         GROUP BY {group_field}
-        ORDER BY {alias} DESC
+        ORDER BY {alias} {order}
         LIMIT {limit}
         """
 
@@ -287,7 +306,8 @@ def ask(question: str):
         clean_data = [
             {
                 "name": row[list(row.keys())[0]],
-                "value": round(row[list(row.keys())[1]], 2)
+                "value": round(row[list(row.keys())[1]], 2),
+                "display_value": format_currency(row[list(row.keys())[1]])
             }
             for row in formatted_data
         ]
@@ -317,77 +337,53 @@ def ask(question: str):
             difference
         )
 
-        if (
-            not summary
-            or any(word in summary.lower() for word in [
-                "outperformed", "surpasses", "decrease", "decline", "increased"
-            ])
-        ):
-            summary = None
-
-        # # -------------------------
-        # # Fallback Summary
-        # # -------------------------
-        # if not summary or summary.strip() == "":
-        #     if len(clean_data) >= 2:
-        #         if metric == "growth":
-        #             if is_decline_query:
-        #                 if top_value < 0:
-        #                     summary = (
-        #                         f"{top_name} shows the biggest decline of ${abs(top_value):,.0f}, "
-        #                         f"worse than {second_name} by ${abs(difference):,.0f}."
-        #                     )
-        #                 else:
-        #                     summary = (
-        #                         f"{top_name} shows the lowest growth of ${top_value:,.0f}, "
-        #                         f"trailing {second_name} by ${abs(difference):,.0f}."
-        #                     )
-        #             else:
-        #                 summary = (
-        #                     f"{top_name} shows the highest growth of ${top_value:,.0f}, "
-        #                     f"ahead of {second_name} by ${difference:,.0f}."
-        #                 )
-        #         else:
-        #             summary = "No data available"
-
-        # return {
-        #     "insight": summary,
-        #     "data": clean_data
-        # }
-    
-
         # -------------------------
-        # Fallback Summary (FINAL)
+        # Guardrail
         # -------------------------
         if not summary or "leads with" not in summary.lower():
+            summary = None
+
+        # -------------------------
+        # Fallback Summary
+        # -------------------------
+        if not summary:
+
             if len(clean_data) >= 2:
+
                 if metric == "growth":
+
                     if is_decline_query:
                         if top_value < 0:
                             summary = (
-                                f"{top_name} shows the biggest decline of ${abs(top_value):,.0f}, "
-                                f"worse than {second_name} by ${abs(difference):,.0f}."
+                                f"{top_name} shows the biggest decline of {format_currency(abs(top_value))}, "
+                                f"worse than {second_name} by {format_currency(abs(difference))}."
                             )
                         else:
                             summary = (
-                                f"{top_name} shows the lowest growth of ${top_value:,.0f}, "
-                                f"trailing {second_name} by ${abs(difference):,.0f}."
+                                f"{top_name} shows the lowest growth of {format_currency(top_value)}, "
+                                f"trailing {second_name} by {format_currency(difference)}."
                             )
 
                     else:
                         summary = (
-                            f"{top_name} shows the highest growth of ${top_value:,.0f}, "
-                            f"ahead of {second_name} by ${difference:,.0f}."
+                            f"{top_name} shows the highest growth of {format_currency(top_value)}, "
+                            f"ahead of {second_name} by {format_currency(difference)}."
                         )
 
                 else:
-                    summary = (
-                        f"{top_name} leads with ${top_value:,.0f} in {metric}, "
-                        f"outperforming {second_name} by ${difference:,.0f}."
-                    )
+                    if order == "ASC":
+                        summary = (
+                            f"{top_name} has the lowest {metric} of {format_currency(top_value)}, "
+                            f"behind {second_name} by {format_currency(difference)}."
+                        )
+                    else:
+                        summary = (
+                            f"{top_name} leads with {format_currency(top_value)} in {metric}, "
+                            f"outperforming {second_name} by {format_currency(difference)}."
+                        )
 
             elif len(clean_data) == 1:
-                summary = f"{top_name} leads with ${top_value:,.0f} in {metric}."
+                summary = f"{top_name} leads with {format_currency(top_value)} in {metric}."
 
             else:
                 summary = "No data available"
