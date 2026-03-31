@@ -44,6 +44,7 @@ conn = mysql.connector.connect(
 )
 
 cursor = conn.cursor()
+sql_query = None
 
 @app.get("/")
 def home():
@@ -83,12 +84,9 @@ sales(order_id, product_id, sales, profit)
 Rules:
 - Only return SQL
 - No explanation
-- ALWAYS include LIMIT 5 unless specified
+- ALWAYS include LIMIT 5
 - Use proper joins
 - Use GROUP BY where needed
-- Do NOT use subqueries with LIMIT
-- Do NOT use nested SELECT
-- Use simple GROUP BY + ORDER BY + LIMIT
 
 Question: {question}
 """
@@ -104,14 +102,15 @@ Question: {question}
 
     raw_sql = response.json()["response"]
 
-# Clean markdown + extra text
     clean_sql = raw_sql.strip()
 
     if "```" in clean_sql:
         clean_sql = clean_sql.split("```")[1]
 
-    if "limit" not in clean_sql.lower():
-        clean_sql += " LIMIT 5"
+    # ✅ HARD FIX: enforce LIMIT cleanly
+    clean_sql = re.sub(r"LIMIT\s+\d+", "", clean_sql, flags=re.IGNORECASE)
+    clean_sql = clean_sql.rstrip(";")
+    clean_sql += " LIMIT 5"
 
     return clean_sql.strip()
 
@@ -167,6 +166,26 @@ Question: {question}
 def ask(question: str):
     question = question.lower()
 
+    # -------------------------
+    # Guardrail: Non-analytics queries
+    # -------------------------
+    irrelevant_patterns = [
+        "hello", "hi", "hii","yo", "hey", "what's up", "how are you",
+        "who are you", "help", "thanks", "thank you", "what can you do", "test"
+    ]
+
+    if any(re.search(rf"\b{p}\b", question) for p in irrelevant_patterns):
+        return {
+            "insight": "Hello. I can help analyze retail data. Try asking something like 'top 5 products by sales' or 'which category grew the fastest in 2017'.",
+            "data": []
+        }
+
+    if len(question.strip()) < 5:
+        return {
+            "insight": "Please ask a meaningful retail question.",
+            "data": []
+        }
+
     cursor = conn.cursor()
 
     # -------------------------
@@ -178,8 +197,18 @@ def ask(question: str):
     # -------------------------
     # Extract LIMIT
     # -------------------------
-    match = re.search(r'\d+', question)
-    limit = int(match.group()) if match else 5
+    # limit_match = re.search(r"(top|bottom)\s+(\d+)", question)
+    # limit = int(limit_match.group(2)) if limit_match else 5
+
+    limit_match = re.search(r"(top|bottom)\s+(\d+)", question)
+    generic_match = re.search(r"\b(\d+)\b", question)
+
+    if limit_match:
+        limit = int(limit_match.group(2))
+    elif generic_match and int(generic_match.group(1)) < 50:
+        limit = int(generic_match.group(1))
+    else:
+        limit = 5
 
     # -------------------------
     # Detect TOP / BOTTOM
@@ -220,12 +249,11 @@ def ask(question: str):
         group_field = "p.product_name"
         name_alias = "product_name"
 
-    sql_query = None
-
     # -------------------------
-    # Growth / Decline Query
+    # Build SQL
     # -------------------------
     if (is_growth_query or is_decline_query) and year_filter:
+
         year = int(year_filter)
         prev_year = year - 1
 
@@ -261,10 +289,8 @@ def ask(question: str):
         metric = "growth"
         name_alias = "category"
 
-    # -------------------------
-    # Normal Query
-    # -------------------------
     else:
+
         joins = """
         FROM sales s
         JOIN products p ON s.product_id = p.product_id
@@ -285,13 +311,24 @@ def ask(question: str):
             where_clause = "WHERE " + " AND ".join(where_conditions)
 
         sql_query = f"""
-        SELECT {group_field} as {name_alias}, SUM(s.{metric}) as {alias}
-        {joins}
-        {where_clause}
-        GROUP BY {group_field}
+        SELECT *
+        FROM (
+            SELECT {group_field} as {name_alias}, SUM(s.{metric}) as {alias}
+            {joins}
+            {where_clause}
+            GROUP BY {group_field}
+        ) ranked
         ORDER BY {alias} {order}
         LIMIT {limit}
         """
+
+    # -------------------------
+    # FINAL LIMIT SAFETY (IMPORTANT)
+    # -------------------------
+    sql_query = re.sub(r"LIMIT\s+\d+", "", sql_query, flags=re.IGNORECASE)
+    sql_query = sql_query.rstrip(";") + f" LIMIT {limit}"
+
+    # print("FINAL SQL:", sql_query)
 
     # -------------------------
     # Execute Query
@@ -299,6 +336,8 @@ def ask(question: str):
     try:
         cursor.execute(sql_query)
         results = cursor.fetchall()
+        
+        # print("ROWS RETURNED:", len(results))
 
         columns = [col[0] for col in cursor.description]
         formatted_data = [dict(zip(columns, row)) for row in results]
@@ -312,20 +351,20 @@ def ask(question: str):
             for row in formatted_data
         ]
 
-        # -------------------------
-        # Metrics
-        # -------------------------
-        top_name = clean_data[0]["name"] if len(clean_data) > 0 else None
+        if not clean_data:
+            return {
+                "insight": "No data found for this query.",
+                "data": []
+            }
+
+        top_name = clean_data[0]["name"]
         second_name = clean_data[1]["name"] if len(clean_data) > 1 else None
 
-        top_value = clean_data[0]["value"] if len(clean_data) > 0 else 0
+        top_value = clean_data[0]["value"]
         second_value = clean_data[1]["value"] if len(clean_data) > 1 else 0
 
         difference = round(abs(top_value - second_value), 2)
 
-        # -------------------------
-        # LLM Summary
-        # -------------------------
         summary = generate_summary(
             question,
             name_alias,
@@ -337,56 +376,17 @@ def ask(question: str):
             difference
         )
 
-        # -------------------------
-        # Guardrail
-        # -------------------------
         if not summary or "leads with" not in summary.lower():
             summary = None
 
-        # -------------------------
-        # Fallback Summary
-        # -------------------------
         if not summary:
-
             if len(clean_data) >= 2:
-
                 if metric == "growth":
-
-                    if is_decline_query:
-                        if top_value < 0:
-                            summary = (
-                                f"{top_name} shows the biggest decline of {format_currency(abs(top_value))}, "
-                                f"worse than {second_name} by {format_currency(abs(difference))}."
-                            )
-                        else:
-                            summary = (
-                                f"{top_name} shows the lowest growth of {format_currency(top_value)}, "
-                                f"trailing {second_name} by {format_currency(difference)}."
-                            )
-
-                    else:
-                        summary = (
-                            f"{top_name} shows the highest growth of {format_currency(top_value)}, "
-                            f"ahead of {second_name} by {format_currency(difference)}."
-                        )
-
+                    summary = f"{top_name} shows the highest growth of {format_currency(top_value)}, ahead of {second_name} by {format_currency(difference)}."
                 else:
-                    if order == "ASC":
-                        summary = (
-                            f"{top_name} has the lowest {metric} of {format_currency(top_value)}, "
-                            f"behind {second_name} by {format_currency(difference)}."
-                        )
-                    else:
-                        summary = (
-                            f"{top_name} leads with {format_currency(top_value)} in {metric}, "
-                            f"outperforming {second_name} by {format_currency(difference)}."
-                        )
-
-            elif len(clean_data) == 1:
-                summary = f"{top_name} leads with {format_currency(top_value)} in {metric}."
-
+                    summary = f"{top_name} leads with {format_currency(top_value)} in {metric}, outperforming {second_name} by {format_currency(difference)}."
             else:
-                summary = "No data available"
+                summary = f"{top_name} leads with {format_currency(top_value)} in {metric}."
 
         return {
             "insight": summary,
