@@ -84,10 +84,32 @@ function App() {
     setResponse(null);
     setShowSuggestions(false);
 
+    
+    
+
     try {
-      const res = await fetch(
-        `http://127.0.0.1:8000/ask?question=${encodeURIComponent(query)}`
-      );
+
+      //   const res = await fetch(
+      //   `http://127.0.0.1:8000/ask?question=${encodeURIComponent(query)}`
+      // );
+      
+      //   const res = await fetch(
+      //   `https://growable-augusta-ivied.ngrok-free.dev/ask?question=${encodeURIComponent(query)}`,
+      //   {
+      //     headers: {
+      //       "ngrok-skip-browser-warning": "true"
+      //     }
+      //   }
+      // );
+
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/ask?question=${encodeURIComponent(query)}`,
+          {
+            headers: {
+              "ngrok-skip-browser-warning": "true"
+            }
+          }
+        );
 
       const data = await res.json();
       setResponse(data);

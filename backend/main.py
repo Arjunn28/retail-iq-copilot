@@ -24,16 +24,27 @@ def format_currency(value):
 
 # CORS settings
 origins = [
-    "http://localhost:5173",  # your frontend dev server
+    "http://localhost:5173", 
+      "https://growable-augusta-ivied.ngrok-free.dev" # your frontend dev server
 ]
+
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=origins,
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],  # TEMP: allow everything
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
 
 conn = mysql.connector.connect(
     host="localhost",
