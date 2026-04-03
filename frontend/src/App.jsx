@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const suggestions = [
-  // SALES
   "Top 5 products by sales",
   "Top 10 products by sales",
   "Bottom 5 products by sales",
@@ -12,7 +11,6 @@ const suggestions = [
   "Top products in east",
   "Best performing products",
 
-  // CATEGORY
   "Top 3 categories by profit",
   "Best category in central region",
   "Top categories in east in 2016 by profit",
@@ -20,13 +18,11 @@ const suggestions = [
   "Least performing category",
   "Which category has lowest sales",
 
-  // PROFIT
   "Top products by profit",
   "Least profitable products",
   "Highest profit categories",
   "Products with negative profit",
 
-  // GROWTH / DECLINE
   "Which category grew the fastest in 2017",
   "Which category declined the most in 2016",
   "Highest growth category",
@@ -36,12 +32,10 @@ const suggestions = [
   "Top growing categories",
   "Least growing categories",
 
-  // REGIONAL
   "Top products in west region",
   "Top categories in south",
   "Best products in east region",
 
-  // MIXED
   "Top 5 products in west in 2017 by sales",
   "Bottom 3 categories by profit in 2016",
   "Highest growth products in 2017"
@@ -54,6 +48,30 @@ function App() {
 
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const [isBackendLive, setIsBackendLive] = useState(false);
+
+  // 🔹 Backend health check
+  const checkBackend = async () => {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/ask?question=test`,
+        {
+          headers: {
+            "ngrok-skip-browser-warning": "true"
+          }
+        }
+      );
+
+      setIsBackendLive(res.ok);
+    } catch {
+      setIsBackendLive(false);
+    }
+  };
+
+  useEffect(() => {
+    checkBackend();
+  }, []);
 
   // INPUT HANDLER
   const handleChange = (e) => {
@@ -84,47 +102,41 @@ function App() {
     setResponse(null);
     setShowSuggestions(false);
 
-    
-    
-
     try {
-
-      //   const res = await fetch(
-      //   `http://127.0.0.1:8000/ask?question=${encodeURIComponent(query)}`
-      // );
-      
-      //   const res = await fetch(
-      //   `https://growable-augusta-ivied.ngrok-free.dev/ask?question=${encodeURIComponent(query)}`,
-      //   {
-      //     headers: {
-      //       "ngrok-skip-browser-warning": "true"
-      //     }
-      //   }
-      // );
-
-        const res = await fetch(
-          `${import.meta.env.VITE_API_URL}/ask?question=${encodeURIComponent(query)}`,
-          {
-            headers: {
-              "ngrok-skip-browser-warning": "true"
-            }
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/ask?question=${encodeURIComponent(query)}`,
+        {
+          headers: {
+            "ngrok-skip-browser-warning": "true"
           }
-        );
+        }
+      );
 
       const data = await res.json();
       setResponse(data);
+
     } catch (error) {
       console.error("Error:", error);
-    }
 
-    setLoading(false);
+      setResponse({
+        insight: "⚠️ Backend is currently offline. Please try again later.",
+        data: []
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100 gap-4">
+      
       <h1 className="text-3xl font-bold">Retail IQ Copilot</h1>
 
-      {/* FORM WRAP (FIXES ENTER KEY) */}
+      {/* 🔴🟢 STATUS INDICATOR */}
+      <p className={`text-sm ${isBackendLive ? "text-green-600" : "text-red-500"}`}>
+        {isBackendLive ? "🟢 Backend Live" : "🔴 Backend Offline"}
+      </p>
+
       <form
         className="flex flex-col items-center gap-3"
         onSubmit={(e) => {
