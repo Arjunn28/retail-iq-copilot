@@ -2,43 +2,9 @@ import { useState, useEffect } from "react";
 
 const suggestions = [
   "Top 5 products by sales",
-  "Top 10 products by sales",
-  "Bottom 5 products by sales",
-  "Lowest selling products",
-  "Highest selling products",
-  "Products with highest sales in 2017",
+  "Lowest performing category",
   "Top products in west in 2017",
-  "Top products in east",
-  "Best performing products",
-
-  "Top 3 categories by profit",
-  "Best category in central region",
-  "Top categories in east in 2016 by profit",
-  "Highest revenue category",
-  "Least performing category",
-  "Which category has lowest sales",
-
-  "Top products by profit",
-  "Least profitable products",
-  "Highest profit categories",
-  "Products with negative profit",
-
-  "Which category grew the fastest in 2017",
-  "Which category declined the most in 2016",
-  "Highest growth category",
-  "Categories with maximum growth",
-  "Which category had the biggest increase in sales",
-  "Which category had the biggest drop in sales",
-  "Top growing categories",
-  "Least growing categories",
-
-  "Top products in west region",
-  "Top categories in south",
-  "Best products in east region",
-
-  "Top 5 products in west in 2017 by sales",
-  "Bottom 3 categories by profit in 2016",
-  "Highest growth products in 2017"
+  "Which category grew the fastest"
 ];
 
 function App() {
@@ -50,10 +16,9 @@ function App() {
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   const [isBackendLive, setIsBackendLive] = useState(false);
-
-  // ✅ NEW: mobile panel toggle
   const [showPanel, setShowPanel] = useState(false);
 
+  // Backend check
   const checkBackend = async () => {
     try {
       const res = await fetch(
@@ -113,10 +78,7 @@ function App() {
 
       const data = await res.json();
       setResponse(data);
-
-    } catch (error) {
-      console.error("Error:", error);
-
+    } catch {
       setResponse({
         insight: "⚠️ Backend is currently offline. Please try again later.",
         data: []
@@ -129,66 +91,83 @@ function App() {
   return (
     <div className="min-h-screen bg-white relative">
 
-      {/* LEFT PANEL */}
-      <div className={`${showPanel ? "flex" : "hidden"} md:flex fixed left-0 top-0 h-full w-72 flex-col p-6 border-r border-gray-200 text-sm text-gray-600 bg-white`}>
-        
-        <h2 className="text-lg font-semibold text-black mb-4">
-          Retail IQ Copilot
-        </h2>
+      {/* ☰ MENU BUTTON */}
+      <button
+        onClick={() => setShowPanel(true)}
+        className="fixed top-5 left-5 text-2xl z-50 bg-white px-2 py-1 rounded shadow"
+      >
+        ☰
+      </button>
 
-        <p className="mb-6">
-          Ask questions about retail performance and get instant insights powered by SQL + AI.
-        </p>
+      {/* OVERLAY */}
+      {showPanel && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-30 z-40"
+          onClick={() => setShowPanel(false)}
+        />
+      )}
 
-        <div className="mb-6">
-          <h3 className="font-semibold text-black mb-2">Dataset</h3>
-          <p>
-            Orders, Products, Customers, Sales, Profit across regions and years.
+      {/* LEFT PANEL (ALWAYS FIXED) */}
+      <div
+        className={`fixed top-0 left-0 h-full w-72 bg-white z-50 transform transition-transform duration-300 shadow-lg
+        ${showPanel ? "translate-x-0" : "-translate-x-full"}`}
+      >
+        <div className="p-6 text-sm text-gray-600 flex flex-col">
+
+          {/* CLOSE */}
+          <button
+            onClick={() => setShowPanel(false)}
+            className="text-xl self-end mb-4"
+          >
+            ✕
+          </button>
+
+          <h2 className="text-lg font-semibold text-black mb-4">
+            Retail IQ Copilot
+          </h2>
+
+          <p className="mb-6">
+            Ask questions about retail performance and get instant insights powered by SQL + AI.
           </p>
-        </div>
 
-        <div>
-          <h3 className="font-semibold text-black mb-2">Try asking</h3>
+          <div className="mb-6">
+            <h3 className="font-semibold text-black mb-2">Dataset</h3>
+            <p>
+              Orders, Products, Customers, Sales, Profit across regions and years.
+            </p>
+          </div>
 
-          <ul className="space-y-2">
-            {[
-              "Top 5 products by sales",
-              "Lowest performing category",
-              "Top products in west in 2017",
-              "Which category grew the fastest"
-            ].map((q, i) => (
-              <li
-                key={i}
-                onClick={() => {
-                  handleSuggestionClick(q);
-                  setTimeout(() => handleAsk(), 100);
-                }}
-                className="cursor-pointer hover:text-black hover:underline transition"
-              >
-                • {q}
-              </li>
-            ))}
-          </ul>
+          <div>
+            <h3 className="font-semibold text-black mb-2">Try asking</h3>
+
+            <ul className="space-y-2">
+              {suggestions.map((q, i) => (
+                <li
+                  key={i}
+                  onClick={() => {
+                    handleSuggestionClick(q);
+                    setShowPanel(false);
+                    setTimeout(() => handleAsk(), 100);
+                  }}
+                  className="cursor-pointer hover:text-black hover:underline transition"
+                >
+                  • {q}
+                </li>
+              ))}
+            </ul>
+          </div>
+
         </div>
       </div>
 
-      {/* MAIN CONTENT */}
-      <div className="flex flex-col items-center justify-center min-h-screen">
+      {/* MAIN CONTENT (PERFECT CENTER, NO SHIFT) */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
 
         <h1 className="text-3xl font-bold">Retail IQ Copilot</h1>
 
-        {/* STATUS */}
         <p className={`text-sm ${isBackendLive ? "text-green-600" : "text-red-500"}`}>
           {isBackendLive ? "🟢 Backend Live" : "🔴 Backend Offline"}
         </p>
-
-        {/* ✅ MOBILE TOGGLE BUTTON */}
-        <button
-          onClick={() => setShowPanel(!showPanel)}
-          className="md:hidden text-sm text-gray-600 underline mb-2"
-        >
-          {showPanel ? "Hide examples" : "Show examples"}
-        </button>
 
         <form
           className="flex flex-col items-center gap-3"
@@ -197,7 +176,7 @@ function App() {
             handleAsk();
           }}
         >
-          <div className="relative w-96 max-w-[90vw]">
+          <div className="relative w-96">
             <input
               type="text"
               placeholder="Ask a retail question..."
@@ -232,7 +211,7 @@ function App() {
 
         {/* RESULTS */}
         <div className="mt-24 w-full flex justify-center">
-          <div className="w-96 max-w-[90vw]">
+          <div className="w-96">
 
             {loading && (
               <div className="flex flex-col items-center">
@@ -270,6 +249,7 @@ function App() {
 
           </div>
         </div>
+
       </div>
 
       {/* FOOTER */}
