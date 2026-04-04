@@ -224,8 +224,16 @@ function App() {
 
       {/* FOOTER */}
       <div className="footer w-full text-center">
-      Built by Arjun | Data, AI, Insights | 2026
-    </div>
+        <a
+          href="https://github.com/Arjunn28/retail-iq-copilot"
+          target="_blank"
+          rel="noopener noreferrer"
+          // className="hover:underline"
+          className="hover:text-gray-500 transition"
+        >
+          Built by Arjun | Data & AI | 2026
+        </a>
+      </div>
 
     </div>
   );
