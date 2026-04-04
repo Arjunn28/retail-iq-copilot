@@ -9,13 +9,18 @@ import json
 app = FastAPI()
 load_dotenv()
 
+# def format_currency(value):
+#     if value is None:
+#         return "$0"
+#     if abs(value) < 100:
+#         return f"${value:,.2f}"
+#     else:
+#         return f"${value:,.0f}"
+    
 def format_currency(value):
     if value is None:
         return "$0"
-    if abs(value) < 100:
-        return f"${value:,.2f}"
-    else:
-        return f"${value:,.0f}"
+    return f"${value:,.0f}"
 
 # CORS
 app.add_middleware(
@@ -78,9 +83,9 @@ Return ONLY valid JSON:
 Rules:
 - One sentence only
 - {instruction}
-- Mention ${primary_value}
+- Mention {primary_value}
 - Compare with {secondary_name}
-- Mention difference ${difference}
+- Mention difference {difference}
 - No percentages, no ratios, no extra text
 
 Question: {question}
@@ -110,6 +115,15 @@ Question: {question}
         print("Ollama error:", e)
         return ""
 
+
+def get_latest_year(cursor):
+    try:
+        cursor.execute("SELECT MAX(YEAR(order_date)) FROM orders")
+        result = cursor.fetchone()
+        return result[0] if result and result[0] else 2017
+    except:
+        return 2017
+
 # -------------------------
 # MAIN ENDPOINT
 # -------------------------
@@ -117,6 +131,9 @@ Question: {question}
 def ask(question: str):
     question = question.lower()
 
+    question = re.sub(r"\bcategories\b", "category", question)
+    question = re.sub(r"\bproducts\b", "product", question)
+    question = re.sub(r"\brevenue\b", "sales", question)
     # -------------------------
     # Guardrails
     # -------------------------
@@ -138,15 +155,20 @@ def ask(question: str):
         }
 
     # -------------------------
-    # Confidence Check (FIXED)
+    # Confidence Check
     # -------------------------
     has_metric = bool(re.search(r"(sales|profit|margin)", question))
-    has_intent = bool(re.search(r"(top|bottom|best|worst|highest|lowest)", question))
+    has_intent = bool(re.search(r"(top|bottom|best|worst|highest|lowest|grow|growth|grew|increase|decline|drop|decrease)", question))
     has_group = bool(re.search(r"(category|product)", question))
 
-    if sum([has_metric, has_intent, has_group]) < 2:
+    # if sum([has_metric, has_intent, has_group]) < 2:
+    #     return {
+    #         "insight": "I couldn't understand your question. Try something like 'top 5 products by sales' or 'lowest performing category in 2017'.",
+    #         "data": []
+    #     }
+    if not has_metric or not has_group:
         return {
-            "insight": "I couldn't understand your question. Try something like 'top 5 products by sales' or 'lowest performing category in 2017'.",
+            "insight": "Please specify what you want to measure (sales or profit). For example: 'top categories by sales'.",
             "data": []
         }
 
@@ -172,22 +194,13 @@ def ask(question: str):
         limit = 5
 
     # -------------------------
-    # Order
-    # -------------------------
-    if re.search(r"(top|best|highest)", question):
-        order = "DESC"
-    elif re.search(r"(bottom|worst|lowest)", question):
-        order = "ASC"
-    else:
-        order = "DESC"
-
-    # -------------------------
     # Metric
     # -------------------------
     if re.search(r"(profit|margin)", question):
         metric = "profit"
         alias = "total_profit"
     else:
+    # default to sales if nothing specified
         metric = "sales"
         alias = "total_sales"
 
@@ -198,7 +211,7 @@ def ask(question: str):
     region_filter = region_match.group().capitalize() if region_match else None
 
     year_match = re.search(r'(20\d{2})', question)
-    year_filter = year_match.group(1) if year_match else None
+    year_filter = int(year_match.group(1)) if year_match else None
 
     # -------------------------
     # Grouping
@@ -211,7 +224,7 @@ def ask(question: str):
         name_alias = "product_name"
 
     # -------------------------
-    # SQL
+    # BASE JOINS + FILTERS
     # -------------------------
     joins = """
     FROM sales s
@@ -233,20 +246,59 @@ def ask(question: str):
     if where_conditions:
         where_clause = "WHERE " + " AND ".join(where_conditions)
 
-    sql_query = f"""
-    SELECT *
-    FROM (
-        SELECT {group_field} as {name_alias}, SUM(s.{metric}) as {alias}
-        {joins}
-        {where_clause}
+    # -------------------------
+    # SQL LOGIC
+    # -------------------------
+    if is_growth_query or is_decline_query:
+
+        # fallback years
+        if year_filter:
+            current_year = year_filter
+            previous_year = year_filter - 1
+        else:
+            latest_year = get_latest_year(cursor)
+            current_year = latest_year
+            previous_year = latest_year - 1
+
+        sql_query = f"""
+        SELECT 
+            {group_field} as {name_alias},
+            SUM(CASE WHEN YEAR(o.order_date) = {current_year} THEN s.{metric} ELSE 0 END) -
+            SUM(CASE WHEN YEAR(o.order_date) = {previous_year} THEN s.{metric} ELSE 0 END) 
+            as growth_value
+        FROM sales s
+        JOIN products p ON s.product_id = p.product_id
+        JOIN orders o ON s.order_id = o.order_id
         GROUP BY {group_field}
-    ) ranked
-    ORDER BY {alias} {order}
-    LIMIT {limit}
-    """
+        ORDER BY growth_value {"DESC" if is_growth_query else "ASC"}
+        LIMIT {limit}
+        """
+
+        order = "DESC" if is_growth_query else "ASC"
+
+    else:
+        # normal queries
+        if re.search(r"(top|best|highest)", question):
+            order = "DESC"
+        elif re.search(r"(bottom|worst|lowest)", question):
+            order = "ASC"
+        else:
+            order = "DESC"
+
+        sql_query = f"""
+        SELECT *
+        FROM (
+            SELECT {group_field} as {name_alias}, SUM(s.{metric}) as {alias}
+            {joins}
+            {where_clause}
+            GROUP BY {group_field}
+        ) ranked
+        ORDER BY {alias} {order}
+        LIMIT {limit}
+        """
 
     # -------------------------
-    # Execute
+    # EXECUTE
     # -------------------------
     try:
         cursor.execute(sql_query)
@@ -255,14 +307,22 @@ def ask(question: str):
         columns = [col[0] for col in cursor.description]
         formatted_data = [dict(zip(columns, row)) for row in results]
 
-        clean_data = [
-            {
-                "name": row[list(row.keys())[0]],
-                "value": round(row[list(row.keys())[1]], 2),
-                "display_value": format_currency(row[list(row.keys())[1]])
-            }
-            for row in formatted_data
-        ]
+        clean_data = []
+
+        for row in formatted_data:
+            keys = list(row.keys())
+            name = row[keys[0]]
+
+            if "growth_value" in row:
+                value = round(row["growth_value"], 2)
+            else:
+                value = round(row[keys[1]], 2)
+
+            clean_data.append({
+                "name": name,
+                "value": value,
+                "display_value": format_currency(value)
+            })
 
         if not clean_data:
             return {"insight": "No data found.", "data": []}
@@ -283,15 +343,12 @@ def ask(question: str):
             metric,
             primary_name,
             secondary_name,
-            primary_value,
-            secondary_value,
-            difference,
+            format_currency(primary_value),
+            format_currency(secondary_value),
+            format_currency(difference),
             order
         )
 
-        # -------------------------
-        # Fallback
-        # -------------------------
         if not summary:
             if len(clean_data) >= 2:
                 if order == "ASC":

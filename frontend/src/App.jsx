@@ -2,9 +2,13 @@ import { useState, useEffect } from "react";
 
 const suggestions = [
   "Top 5 products by sales",
-  "Lowest performing category",
-  "Top products in west in 2017",
-  "Which category grew the fastest"
+  "Top categories by profit",
+  "Lowest performing category by sales",
+  "Top products in west in 2017 by sales",
+  "Top products in east by profit",
+  "Lowest products by profit",
+  "Which category sales grew the fastest",
+  "Which category profit declined the most"
 ];
 
 function App() {
@@ -260,7 +264,7 @@ function App() {
           rel="noopener noreferrer"
           className="hover:text-gray-500 transition"
         >
-          Crafted by Arjun · Data & AI · 2026
+          Built by Arjun · Data & AI · 2026
         </a>
       </div>
 
