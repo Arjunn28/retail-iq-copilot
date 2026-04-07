@@ -106,7 +106,8 @@ function App() {
       {/* OVERLAY */}
       {showPanel && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-30 z-40"
+          // className="fixed inset-0 bg-black bg-opacity-30 z-40"
+          className="fixed inset-0 backdrop-blur-sm bg-black/10 z-40"
           onClick={() => setShowPanel(false)}
         />
       )}
@@ -257,7 +258,7 @@ function App() {
       </div>
 
       {/* FOOTER */}
-      <div className="footer fixed bottom-0 w-full text-center">
+      <div className="footer fixed bottom-0 w-full text-center bg-white border-t border-gray-200 py-2 z-40">
         <a
           href="https://github.com/Arjunn28/retail-iq-copilot"
           target="_blank"
