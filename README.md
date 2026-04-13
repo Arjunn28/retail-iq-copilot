@@ -3,10 +3,13 @@
 ![API](https://img.shields.io/badge/API-FastAPI-blue)
 ![AI](https://img.shields.io/badge/AI-NLP%20%2B%20SQL-orange)
 
-An AI-powered analytics system that converts natural language questions into executable SQL queries and returns structured, decision-ready insights on top of retail data.
+> An AI-powered analytics system that converts natural language questions into executable SQL queries and returns 
+> structured, decision-ready insights on top of retail data.
 
+**Live Demo:** [retail-iq-copilot.vercel.app](https://retail-iq-copilot.vercel.app/)  
 **Author:** Arjun A N
 
+> ⚠️ **Note on working:** Backend runs locally. Hence server activation will be needed for working. 
 ---
 
 ## 🚀 Overview
@@ -247,3 +250,4 @@ Prioritizes reliability over unrestricted input.
 ## 👤 Author
 
 **Arjun A N**
+[GitHub](https://github.com/Arjunn28) · [Live Demo](https://retail-iq-copilot.vercel.app/) · [LinkedIn](https://www.linkedin.com/in/arjun-an/)
