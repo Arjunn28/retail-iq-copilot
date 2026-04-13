@@ -258,7 +258,7 @@ function App() {
       </div>
 
       {/* FOOTER */}
-      <div className="footer fixed bottom-0 w-full text-center bg-white border-t border-gray-200 py-2 z-40">
+      {/* <div className="footer fixed bottom-0 w-full text-center bg-white border-t border-gray-200 py-2 z-40">
         <a
           href="https://github.com/Arjunn28/retail-iq-copilot"
           target="_blank"
@@ -267,6 +267,23 @@ function App() {
         >
           Built by Arjun · Data & AI · 2026
         </a>
+      </div> */}
+
+      {/* Fixed footer */}
+      <div style={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        textAlign: "center",
+        padding: "10px",
+        fontSize: "12px",
+        color: "var(--color-text-tertiary)",
+        background: "var(--color-background-primary)",
+        borderTop: "0.5px solid var(--color-border-tertiary)",
+        zIndex: 100,
+      }}>
+        Built by Arjun · Data & AI · 2026
       </div>
 
     </div>
