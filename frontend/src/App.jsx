@@ -117,36 +117,73 @@ function App() {
         className={`fixed top-0 left-0 h-full w-72 bg-white z-50 transform transition-transform duration-300 shadow-lg
         ${showPanel ? "translate-x-0" : "-translate-x-full"}`}
       >
-        <div className="p-6 text-sm text-gray-600 flex flex-col">
+        <div className="p-5 text-sm text-gray-600 flex flex-col h-full overflow-y-auto">
 
           {/* CLOSE */}
           <button
             onClick={() => setShowPanel(false)}
-            className="text-xl self-end mb-4"
+            className="text-xl self-end mb-3"
           >
             ✕
           </button>
 
-          <h2 className="text-lg font-semibold text-black mb-4">
+          {/* TITLE */}
+          <h2 className="text-base font-semibold text-black">
             Retail IQ Copilot
           </h2>
-
-          <p className="mb-6">
-            Ask questions about retail performance and get instant insights powered by SQL + AI.
+          <p className="text-xs text-gray-500 mb-3">
+            Natural Language → SQL → Insights
           </p>
 
-          <div className="mb-6">
-            <h3 className="font-semibold text-black mb-2">Dataset</h3>
-            <p>
-              Orders, Products, Customers, Sales, Profit across regions and years.
+          {/* DESCRIPTION */}
+          <p className="mb-4 text-sm">
+            Query retail data in plain English. Generates SQL, executes queries and returns validated insights with context.
+          </p>
+
+          {/* CAPABILITIES */}
+          <div className="mb-4">
+            <h3 className="font-medium text-black mb-1 text-sm">Capabilities</h3>
+            <ul className="space-y-1 text-xs">
+              <li>• NL → SQL generation</li>
+              <li>• Schema-aware queries</li>
+              <li>• Joins & aggregations</li>
+              <li>• Trend analysis</li>
+              <li>• Insight reasoning</li>
+            </ul>
+          </div>
+
+          {/* DATASET */}
+          <div className="mb-4">
+            <h3 className="font-medium text-black mb-1 text-sm">Dataset Scope</h3>
+            <p className="text-xs">
+              Products · Customers <br />
+              Sales · Profit · Multi-region <br /> 
+              Multi-year transactional data
             </p>
           </div>
 
-          <div>
-            <h3 className="font-semibold text-black mb-2">Try asking</h3>
+          {/* SYSTEM FLOW */}
+          <div className="mb-4">
+            <p> </p>
+            <h3 className="font-medium text-black mb-1 text-sm">System Flow</h3>
+            <p className="text-xs">
+              User Query → LLM → SQL Generation → Execution → Insight
+            </p>
+          </div>
 
-            <ul className="space-y-2">
-              {suggestions.map((q, i) => (
+           {/* SYSTEM STATUS */}     
+          <div className="mb-4">
+            <h3 className="font-medium text-black mb-1 text-sm">System Status</h3>
+            <p className={`text-xs ${isBackendLive ? "text-green-600" : "text-red-500"}`}>
+              {isBackendLive ? "● Backend Live" : "● Backend Offline"}
+            </p>
+          </div>
+
+          {/* EXAMPLES */}
+          <div>
+            <h3 className="font-medium text-black mb-1 text-sm">Examples</h3>
+            <ul className="space-y-1 text-xs">
+              {suggestions.slice(0, 5).map((q, i) => (
                 <li
                   key={i}
                   onClick={() => {
@@ -160,6 +197,29 @@ function App() {
                 </li>
               ))}
             </ul>
+          </div>
+
+          {/* FOOTER */}
+          <div className="mt-auto pt-4 text-xs text-gray-500">
+            <p className="font-medium text-gray-700">Arjun A N</p>
+            <div className="flex gap-3 mt-1">
+              <a
+                href="https://github.com/Arjunn28"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-black"
+              >
+                GitHub ↗
+              </a>
+              <a
+                href="https://www.linkedin.com/in/arjun-a-n/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-black"
+              >
+                LinkedIn ↗
+              </a>
+            </div>
           </div>
 
         </div>
@@ -258,7 +318,7 @@ function App() {
       </div>
 
       {/* FOOTER */}
-      {/* <div className="footer fixed bottom-0 w-full text-center bg-white border-t border-gray-200 py-2 z-40">
+      <div className="footer fixed bottom-0 w-full text-center bg-white border-t border-gray-200 py-2 z-40">
         <a
           href="https://github.com/Arjunn28/retail-iq-copilot"
           target="_blank"
@@ -267,23 +327,6 @@ function App() {
         >
           Built by Arjun · Data & AI · 2026
         </a>
-      </div> */}
-
-      {/* Fixed footer */}
-      <div style={{
-        position: "fixed",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        textAlign: "center",
-        padding: "10px",
-        fontSize: "12px",
-        color: "var(--color-text-tertiary)",
-        background: "var(--color-background-primary)",
-        borderTop: "0.5px solid var(--color-border-tertiary)",
-        zIndex: 100,
-      }}>
-        Built by Arjun · Data & AI · 2026
       </div>
 
     </div>
