@@ -109,11 +109,12 @@ Why:
 ### 4. Data Processing
 - Cleans and formats output  
 - Ensures consistency before insight generation  
+- Superstore Dataset https://www.kaggle.com/datasets/vivek468/superstore-dataset-final
 
 ---
 
 ### 5. Insight Generation
-- LLM converts results into readable summaries  
+- LLM (Meta Llama 3) converts results into readable summaries  
 - Fallback logic ensures stable output  
 
 ---
@@ -155,6 +156,14 @@ Why:
 
 ---
 
+---
+
+### Sample Output
+
+![Retail IQ Copilot Working Screenshot](./assets/retail_copilot_output_screenshot.png)
+
+---
+
 ## 🔌 API Usage
 
 **Endpoint:**
@@ -173,8 +182,8 @@ http://127.0.0.1:8000/ask?question=top%205%20products%20by%20sales
 | Backend | FastAPI |
 | Query Engine | Python |
 | Database | MySQL |
-| LLM | (configurable) |
-| Dataset | Superstore |
+| LLM | Meta Llama 3 (free version, running locally)|
+| Dataset | Superstore Dataset https://www.kaggle.com/datasets/vivek468/superstore-dataset-final |
 
 ---
 
@@ -219,7 +228,6 @@ Prioritizes reliability over unrestricted input.
 
 ## 🔮 Future Improvements
 
-- Hybrid LLM + rule-based SQL generation  
 - Multi-metric comparisons  
 - Query caching  
 - Dashboard enhancements  
