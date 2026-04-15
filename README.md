@@ -13,9 +13,13 @@
 ---
 
 ## 🚀 Overview
+> Converts plain English questions into SQL queries and returns business-ready insights
+> from structured retail data. Built for non-technical users who need answers without
+> writing SQL or waiting for an analyst.
+>(I guess I dug my own grave with this one here? XD)
 
 Most analytics tools are dashboard-driven.  
-They require users to know where to look, what to filter, and how to interpret data.
+They require users to know where to look, what to filter and how to interpret data.
 
 Retail IQ Copilot removes that friction.
 
@@ -95,6 +99,12 @@ Extracts:
 
 ### 2. SQL Generation
 Uses **rule-based logic** instead of pure LLM generation.
+
+The SQL generation layer is rule-based, not LLM-generated. This was a deliberate
+design choice: letting an LLM write SQL directly introduces hallucination risk on
+column names, table structure, and filter logic. Rule-based generation is deterministic
+and auditable. The LLM is used only where it adds value — generating the natural
+language insight over a result it did not compute.
 
 Why:
 - prevents invalid SQL  
@@ -189,6 +199,42 @@ http://127.0.0.1:8000/ask?question=top%205%20products%20by%20sales
 | Dataset | Superstore Dataset https://www.kaggle.com/datasets/vivek468/superstore-dataset-final |
 
 ---
+
+## Running locally
+
+**Prerequisites:** Python 3.11+, Node.js 18+, MySQL
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/Arjunn28/retail-iq-copilot.git
+cd retail-iq-copilot
+
+# 2. Set up Python environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# 3. Configure environment variables
+cp .env.example .env
+# Add your GROQ_API_KEY and MySQL credentials to .env
+
+# 4. Start the backend
+uvicorn backend.main:app --reload --port 8000
+
+# 5. Start the frontend (new terminal)
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173` to use the interface.  
+Open `http://localhost:8000/docs` for the API documentation.
+
+---
+
+## API
+GET /ask?question=<your query>
+
 
 ## ⚖️ Design Decisions
 
